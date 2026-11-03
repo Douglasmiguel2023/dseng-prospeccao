@@ -22,9 +22,48 @@ filtros e aprovação de lotes — sem precisar abrir a conversa com o Muse.
   motivo da qualificação, link para o perfil, status
   (pendente / aprovado_para_envio / enviado / respondeu / descartado) e
   observação. Dá para mudar o status manualmente e descartar um lead.
+- Adicionar lead manual na página da rodada (só com sessão de admin).
+- Importar leads na página da rodada: colar um JSON array com username,
+  displayName, followers, qualification, profileUrl e note; todos entram
+  como pendentes e username duplicado dentro da rodada é ignorado.
+- API de fila para o trabalho separado do Muse (sem envio automático):
+  `GET /api/queue/pending` e `POST /api/rounds/[id]/leads`, ambas com
+  header `x-muse-token` (veja “Como os leads entram no painel”).
 - Seed de exemplo: a rodada real de 2026-11-03, fonte `@grazy_designss`,
   com 5 leads enviados e 1 pendente segurada para texto de parceria.
 - Identidade visual DSENG v3 roxa: fundo escuro, roxo/magenta.
+
+## Como os leads entram no painel — leia isto antes de criar uma rodada
+
+**Criar a rodada sozinha NÃO busca no Instagram.** O painel não tem
+token da Meta e não faz busca automática de curtidas, comentários ou
+seguidores — por isso uma rodada recém-criada começa com 0 leads, e
+isso não é erro. Os leads entram por um destes três caminhos:
+
+1. **Adicionar lead** na página da rodada (formulário, só com sessão de
+   admin): username (sem @), nome, seguidores, motivo da qualificação,
+   link do perfil e observação. O lead entra como pendente.
+2. **Importar leads** na página da rodada: colar um JSON array com os
+   campos `username`, `displayName`, `followers`, `qualification`,
+   `profileUrl` e `note`. Todos entram como pendentes; username
+   duplicado dentro da rodada é ignorado e a página informa quantos
+   foram criados e quantos foram ignorados por duplicata.
+3. **API de fila** (trabalho separado do Muse, sem envio automático):
+   - `GET /api/queue/pending` — lista as rodadas abertas com 0 leads.
+   - `POST /api/rounds/[id]/leads` — recebe o mesmo JSON array do item 2
+     e cria os leads como pendentes, com a mesma regra de duplicata.
+   - Ambas exigem o header `x-muse-token` com o valor da variável
+     `MUSE_IMPORT_TOKEN`. Se a variável não estiver definida, a API
+     responde **503 e nunca aceita chamadas**; token errado responde
+     **401**. Para ligar a fila: crie `MUSE_IMPORT_TOKEN` em Production
+     na Vercel (uma string longa e aleatória, só nas variáveis de
+     ambiente, nunca no chat nem no código) e faça redeploy. Sem o
+     token, a fila fica desligada por segurança — e isso não afeta o
+     login nem a importação manual.
+
+Nada aqui promete busca automática pelo painel nem envio automático de
+DM: “Aprovar lote” só marca `aprovado_para_envio`; o envio real continua
+pela conexão do Muse, em trabalho separado, com aprovação do responsável.
 
 ## Stack
 
@@ -51,6 +90,8 @@ Vercel; nunca em código):
 - `ADMIN_PASSWORD_HASH` — hash bcrypt da senha.
 - `ADMIN_PASSWORD` — opcional, só como fallback se o hash desencontrar.
 - `AUTH_SECRET` — string longa e aleatória para assinar a sessão.
+- `MUSE_IMPORT_TOKEN` — opcional, só para a API de fila (veja acima).
+  Sem ela, a API responde 503.
 - `NEXT_PUBLIC_APP_URL` — URL pública do projeto na Vercel.
 
 Gerar o hash da senha:
@@ -98,6 +139,8 @@ O código não foi publicado por aqui. Falta só o lado dele, na ordem:
      - `ADMIN_EMAIL` — o e-mail do administrador.
      - `ADMIN_PASSWORD_HASH` — o hash gerado com `npm run hash-password`.
      - `AUTH_SECRET` — uma string longa e aleatória.
+     - `MUSE_IMPORT_TOKEN` — opcional, só se quiser ligar a API de fila
+       (veja “Como os leads entram no painel”).
    - `ADMIN_PASSWORD` só se o login com hash falhar: aí crie também essa
      variável, com a senha direta, em Production, e faça redeploy.
 
@@ -122,8 +165,9 @@ O código não foi publicado por aqui. Falta só o lado dele, na ordem:
 
 ## Limites conhecidos da v1
 
-- O painel não lê o Instagram sozinho: os leads de uma rodada nova são
-  lançados após a análise da fonte pela conexão do Muse.
+- O painel não lê o Instagram sozinho: criar a rodada não busca leads.
+  Os leads entram por adição manual, importação de JSON ou API de fila,
+  após a análise da fonte pela conexão do Muse.
 - Seguidores de terceiros e stories ativas de qualquer perfil não são
   lidos pela API oficial — por isso o filtro de atividade usa “último
   post em até N dias” como proxy.

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, getAdminEmail, SESSION_COOKIE } from "@/lib/auth";
 import { LEAD_STATUSES } from "@/lib/status";
+import { importLeadsForRound, normalizeUsername } from "@/lib/leads";
 
 async function requireAdmin() {
   const email = await getAdminEmail();
@@ -68,6 +69,64 @@ export async function createRound(formData: FormData) {
   });
   revalidatePath("/admin");
   redirect(`/admin/${round.id}`);
+}
+
+export async function addLead(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId"));
+  const username = normalizeUsername(formData.get("username"));
+  if (!username) {
+    redirect(`/admin/${roundId}?error=Informe%20o%20username%20do%20lead.`);
+  }
+  const existing = await prisma.lead.findMany({
+    where: { roundId },
+    select: { username: true },
+  });
+  if (existing.some((l) => l.username.toLowerCase() === username)) {
+    redirect(`/admin/${roundId}?error=Este%20lead%20j%C3%A1%20existe%20nesta%20rodada.`);
+  }
+  const followersRaw = String(formData.get("followers") ?? "").trim();
+  const followers = followersRaw === "" ? null : Math.trunc(Number(followersRaw));
+  await prisma.lead.create({
+    data: {
+      roundId,
+      username,
+      displayName: String(formData.get("displayName") ?? "").trim(),
+      followers: Number.isFinite(followers) ? followers : null,
+      qualification: String(formData.get("qualification") ?? "").trim(),
+      profileUrl: String(formData.get("profileUrl") ?? "").trim(),
+      note: String(formData.get("note") ?? "").trim(),
+      status: "pendente",
+    },
+  });
+  revalidatePath("/admin");
+  revalidatePath(`/admin/${roundId}`);
+  redirect(`/admin/${roundId}?ok=Lead%20%40${username}%20adicionado%20como%20pendente.`);
+}
+
+export async function importLeads(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId"));
+  const raw = String(formData.get("json") ?? "").trim();
+  let items: unknown;
+  try {
+    items = JSON.parse(raw);
+  } catch {
+    redirect(`/admin/${roundId}?error=JSON%20inv%C3%A1lido%3A%20esperado%20um%20array%20de%20leads.`);
+  }
+  if (!Array.isArray(items)) {
+    redirect(`/admin/${roundId}?error=JSON%20inv%C3%A1lido%3A%20esperado%20um%20array%20de%20leads.`);
+  }
+  const result = await importLeadsForRound(roundId, items);
+  const extra =
+    result.skippedInvalid > 0
+      ? `%20(${result.skippedInvalid}%20inv%C3%A1lido(s))`
+      : "";
+  revalidatePath("/admin");
+  revalidatePath(`/admin/${roundId}`);
+  redirect(
+    `/admin/${roundId}?ok=${result.created}%20lead(s)%20criado(s)%2C%20${result.skippedDuplicate}%20ignorado(s)%20por%20duplicata${extra}.`,
+  );
 }
 
 export async function updateLead(formData: FormData) {

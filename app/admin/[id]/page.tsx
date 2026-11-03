@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getAdminEmail } from "@/lib/auth";
-import { approveBatch, discardLead, logout, updateLead } from "../actions";
+import { addLead, approveBatch, discardLead, importLeads, logout, updateLead } from "../actions";
 import { LEAD_STATUSES, STATUS_LABEL as statusLabel } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +57,67 @@ export default async function RoundPage({
       )}
 
       <section className="glass card-glow mt-6 rounded-2xl p-5">
+        <h2 className="text-xl font-bold">Adicionar lead</h2>
+        <p className="mt-1 text-sm text-lilac">
+          Criar a rodada sozinha não busca no Instagram — o painel não tem
+          token da Meta. Adicione o lead aqui (ele entra como pendente) ou
+          importe um JSON abaixo.
+        </p>
+        <form action={addLead} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="roundId" value={round.id} />
+          <label className="text-sm font-semibold">
+            Username (sem @)
+            <input name="username" required placeholder="exemplo" className={inputCls} />
+          </label>
+          <label className="text-sm font-semibold">
+            Nome
+            <input name="displayName" placeholder="Nome / empresa" className={inputCls} />
+          </label>
+          <label className="text-sm font-semibold">
+            Seguidores
+            <input name="followers" type="number" min={0} placeholder="0" className={inputCls} />
+          </label>
+          <label className="text-sm font-semibold">
+            Link do perfil
+            <input name="profileUrl" placeholder="https://www.instagram.com/exemplo/" className={inputCls} />
+          </label>
+          <label className="text-sm font-semibold sm:col-span-2">
+            Motivo da qualificação
+            <input name="qualification" placeholder="Negócio + link na bio + post recente" className={inputCls} />
+          </label>
+          <label className="text-sm font-semibold sm:col-span-2">
+            Observação
+            <input name="note" placeholder="Observação" className={inputCls} />
+          </label>
+          <button className="rounded-full bg-gradient-to-r from-violet to-magenta py-2.5 font-bold text-white sm:col-span-2">
+            Adicionar lead
+          </button>
+        </form>
+      </section>
+
+      <section className="glass card-glow mt-6 rounded-2xl p-5">
+        <h2 className="text-xl font-bold">Importar leads</h2>
+        <p className="mt-1 text-sm text-lilac">
+          Cole um JSON array com os campos username, displayName, followers,
+          qualification, profileUrl e note. Todos entram como pendentes e
+          username duplicado dentro desta rodada é ignorado.
+        </p>
+        <form action={importLeads} className="mt-4">
+          <input type="hidden" name="roundId" value={round.id} />
+          <textarea
+            name="json"
+            required
+            rows={8}
+            placeholder='[{"username":"exemplo","displayName":"Exemplo","followers":1000,"qualification":"Negócio + link na bio","profileUrl":"https://www.instagram.com/exemplo/","note":""}]'
+            className={`${inputCls} font-mono`}
+          />
+          <button className="mt-3 rounded-full bg-gradient-to-r from-violet to-magenta px-5 py-2.5 font-bold text-white">
+            Importar leads
+          </button>
+        </form>
+      </section>
+
+      <section className="glass card-glow mt-6 rounded-2xl p-5">
         <h2 className="text-xl font-bold">Aprovar lote</h2>
         <p className="mt-1 text-sm text-lilac">
           Selecione os leads pendentes e clique em aprovar. Isso apenas marca
@@ -90,8 +151,8 @@ export default async function RoundPage({
         <h2 className="text-xl font-bold">Leads ({round.leads.length})</h2>
         {round.leads.length === 0 ? (
           <p className="mt-3 text-lilac">
-            Nenhum lead nesta rodada ainda. Os leads qualificados são lançados
-            aqui após a análise da fonte.
+            Nenhum lead nesta rodada ainda. Adicione manualmente ou importe um
+            JSON acima — criar a rodada sozinha não busca no Instagram.
           </p>
         ) : (
           <table className="mt-3 w-full min-w-[900px] border-collapse text-sm">
