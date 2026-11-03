@@ -1,0 +1,46 @@
+// DSENG Prospecção — schema commitado.
+// PRODUÇÃO: provider "postgresql" (Neon, na Vercel), via DATABASE_URL.
+// TESTE LOCAL com SQLite: trocar TEMPORARIAMENTE o provider para "sqlite"
+// e a DATABASE_URL para "file:./dev.db", testar, e REVERTER antes de
+// commitar. O arquivo commitado deve ficar em "postgresql".
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Round {
+  id            String   @id @default(cuid())
+  source        String
+  maxDays       Int      @default(10)
+  requireLink   Boolean  @default(true)
+  onlyBusiness  Boolean  @default(true)
+  excludeSent   Boolean  @default(true)
+  status        String   @default("aberta") // aberta | concluida
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  leads         Lead[]
+
+  @@index([createdAt])
+}
+
+model Lead {
+  id            String   @id @default(cuid())
+  roundId       String
+  round         Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  username      String
+  displayName   String   @default("")
+  followers     Int?
+  qualification String   @default("")
+  profileUrl    String   @default("")
+  // pendente | aprovado_para_envio | enviado | respondeu | descartado
+  status        String   @default("pendente")
+  note          String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([roundId, status])
+}
